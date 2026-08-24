@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raporlar Görüntüleyici</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        table { border-collapse: collapse; width: 100%; text-align: left; table-layout: auto; }
+        
+        thead { position: sticky; top: 0; z-index: 50; }
+        
+        th {
+            background-color: #a8b0b9; 
+            color: black;
+            font-weight: 600;
+            border: 1px solid #737373;
+            padding: 6px 4px;
+            cursor: pointer;
+            user-select: none;
+            position: sticky;
+            top: -1px; 
+            z-index: 50; 
+            font-size: 0.75rem;
+            line-height: 1.2;
+            background-clip: padding-box; 
+            outline: 1px solid #a8b0b9; 
+            outline-offset: -1px;
+        }
+        th:hover { background-color: #8c939b; }
+        td {
+            border: 1px solid #9ca3af;
+            padding: 6px 4px;
+            color: #111827;
+            font-size: 0.75rem;
+            line-height: 1.3;
+            word-wrap: break-word;
+            word-break: break-word;
+            position: relative;
+            z-index: 1;
+        }
+        .sort-icon { margin-left: 2px; font-size: 0.8em; color: #374151; }
+
+        .row-ingilizce { background-color: #f4cdd2; }
+        .row-japonca { background-color: #f8dabf; }
+        .row-osmanlica { background-color: #c4e1e3; }
+        .row-yturkce { background-color: #e5d8ea; }
+        .row-arapca { background-color: #d1ecc8; }
+        .row-fransizca { background-color: #c9def5; }
+        .row-almanca { background-color: #e5e7eb; }
+        .row-italyanca { background-color: #c6e5d0; }
+        .row-kurtce { background-color: #fdf0c3; }
+        .row-isaret { background-color: #fdf0c3; }
+        .row-default { background-color: #ffffff; }
+        
+        tbody tr:hover td { filter: brightness(0.95); z-index: 2; }
+    </style>
+</head>
+<body class="bg-gray-100 p-2 sm:p-4 font-sans">
+
+    <div class="w-full mx-auto bg-white p-4 rounded-lg shadow-md border border-gray-200">
+        <div class="flex justify-between items-center mb-4 border-b pb-4">
+            <div>
+                <h1 class="text-xl font-bold text-gray-800 tracking-tight">Eğitim Raporları</h1>
+                <p class="text-gray-500 mt-1 text-xs sm:text-sm">Verileriniz Firebase bulutunda güvenle saklanır ve cihazlar arası senkronize edilir.</p>
+            </div>
+            
+            <input type="file" id="fileUpload" accept=".xls,.xlsx" class="block w-full text-xs text-gray-500
+                file:mr-4 file:py-2 file:px-3
+                file:rounded-md file:border-0
+                file:font-semibold
+                file:bg-slate-800 file:text-white
+                hover:file:bg-slate-700 max-w-xs cursor-pointer transition-colors" />
+        </div>
+
+        <div class="overflow-x-hidden border border-gray-400 rounded max-h-[80vh] overflow-y-auto shadow-inner">
+            <table id="dataTable" class="hidden">
+                <thead id="tableHead"></thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+            
+            <div id="emptyState" class="text-center py-20 text-gray-400">
+                <svg class="animate-spin mx-auto h-12 w-12 mb-3 text-gray-300" id="loadingIcon" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p id="emptyText">Buluttan veriler kontrol ediliyor...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase v10 Entegrasyonu -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+        // ==========================================
+        // 1. KENDİ FIREBASE AYARLARINI BURAYA YAPIŞTIR
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "API_ANAHTARIN",
+            authDomain: "PROJE_ID.firebaseapp.com",
+            projectId: "PROJE_ID",
+            storageBucket: "PROJE_ID.appspot.com",
+            messagingSenderId: "SENDER_ID",
+            appId: "APP_ID"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Global Değişkenler
+        window.manualDataCache = {};
+        window.mappedData = [];
+        window.currentSortCol = null;
+        window.sortAsc = true;
+
+        // Firebase'den Başlangıç Verilerini Çek
+        window.loadInitialData = async function() {
+            try {
+                // Sınav tarihleri ve tickleri getir
+                const extraRef = doc(db, "raporlar", "ekstra_veriler");
+                const extraSnap = await getDoc(extraRef);
+                if (extraSnap.exists()) {
+                    window.manualDataCache = extraSnap.data();
+                }
+
+                // Kaydedilmiş Excel tablosunu getir
+                const excelRef = doc(db, "raporlar", "excel_verisi");
+                const excelSnap = await getDoc(excelRef);
+                
+                if (excelSnap.exists()) {
+                    let rawData = JSON.parse(excelSnap.data().jsonString);
+                    window.processData(rawData);
+                    document.getElementById('emptyState').classList.add('hidden');
+                    document.getElementById('dataTable').classList.remove('hidden');
+                    window.renderTable();
+                } else {
+                    document.getElementById('loadingIcon').classList.add('hidden');
+                    document.getElementById('emptyText').innerHTML = "Henüz buluta bir dosya yüklenmedi.<br>Lütfen bir Excel dosyası yükleyin.";
+                }
+            } catch (e) {
+                console.error("Buluttan veri çekilirken hata oluştu:", e);
+                document.getElementById('emptyText').innerText = "Veri bağlantı hatası.";
+            }
+        };
+
+        // Excel Yüklendiğinde Firebase'e Kaydet
+        window.saveExcelToFirebase = async function(rawData) {
+            try {
+                const jsonString = JSON.stringify(rawData);
+                await setDoc(doc(db, "raporlar", "excel_verisi"), { jsonString });
+                console.log("Excel buluta kaydedildi.");
+            } catch (e) {
+                console.error("Excel Firebase'e kaydedilemedi:", e);
+                alert("Dosya çok büyük olduğu için buluta tam yüklenememiş olabilir.");
+            }
+        };
+
+        // Tick veya Tarih Eklenince Firebase'i Güncelle
+        window.updateFirebaseData = async function(id, key, value, isCheckbox = false) {
+            if (!window.manualDataCache[id]) window.manualDataCache[id] = { checks: {} };
+            
+            if (isCheckbox) {
+                window.manualDataCache[id].checks[key] = value;
+            } else {
+                window.manualDataCache[id][key] = value;
+            }
+
+            try {
+                await setDoc(doc(db, "raporlar", "ekstra_veriler"), window.manualDataCache);
+            } catch (e) {
+                console.error("Ekstra veriler Firebase'e kaydedilemedi:", e);
+            }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            window.loadInitialData();
+        });
+    </script>
+
+    <!-- Tablo İşlemleri ve Render Motoru -->
+    <script>
+        const columnsConfig = [
+            { title: "HEM Kodu", excelKeys: ["hemkodu", "kurumkodu", "hemkod"] },
+            { title: "Eğitim ID", excelKeys: ["eğitimid", "eğitimıd", "egitimid", "egitimıd", "dersid", "dersıd", "kursno", "id", "ıd"] },
+            { title: "Eğitmen Adı", excelKeys: ["eğitmenadı", "egitmenadi", "eğitmen", "egitmen", "öğretmen", "ogretmen"] },
+            { title: "Program Adı", excelKeys: ["programadı", "programadi", "branş", "brans", "kursadı", "kursadi"] },
+            { title: "Ders Başlama Tarihi", excelKeys: ["başlamatarihi", "baslamatarihi", "dersbaşlamatarihi", "dersbaslamatarihi", "dbaşlama", "dbaslama", "başlama", "baslama"], extractType: "Ders" },
+            { title: "Onay Başlama Tarihi", excelKeys: ["başlamatarihi", "baslamatarihi", "onaybaşlamatarihi", "onaybaslamatarihi", "obaşlama", "obaslama"], extractType: "Onay" },
+            { title: "Ders Bitiş Tarihi", excelKeys: ["bitiştarihi", "bitistarihi", "dersbitiştarihi", "dersbitistarihi", "dbitiş", "dbitis", "bitiş", "bitis"], extractType: "Ders" },
+            { title: "Onay Bitiş Tarihi", excelKeys: ["bitiştarihi", "bitistarihi", "onaybitiştarihi", "onaybitistarihi", "obitiş", "obitis"], extractType: "Onay" },
+            { title: "Ders Günleri", excelKeys: ["gun", "gün", "dersgünleri", "dersgunleri", "günler", "gunler"] },
+            { title: "Ders Saatleri", excelKeys: ["zaman", "derssaatleri", "saatler", "vakit", "saat"] },
+            { title: "Derslik Bilgisi", excelKeys: ["derslik", "derslikbilgisi", "sınıf", "sinif", "mekan", "salon"] },
+            { title: "Sınav Tarihleri", excelKeys: [], isManual: true }
+        ];
+
+        function getSavedData(id) {
+            return window.manualDataCache[id] || { checks: {} };
+        }
+
+        window.updateMappedData = function(rowId, colTitle, value) {
+            let rowData = window.mappedData.find(r => r["Eğitim ID"] == rowId);
+            if (rowData) rowData[colTitle] = value;
+        };
+
+        document.getElementById('fileUpload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                
+                if(worksheet) {
+                    let rawData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: "", raw: false});
+                    
+                    window.saveExcelToFirebase(rawData);
+                    
+                    window.processData(rawData);
+                    document.getElementById('emptyState').classList.add('hidden');
+                    document.getElementById('dataTable').classList.remove('hidden');
+                    window.renderTable();
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function normalizeString(str) {
+            if (!str) return '';
+            let s = str.toString();
+            s = s.replace(/İ/g, 'i').replace(/I/g, 'ı')
+                 .replace(/Ö/g, 'ö').replace(/Ü/g, 'ü')
+                 .replace(/Ş/g, 'ş').replace(/Ç/g, 'ç')
+                 .replace(/Ğ/g, 'ğ');
+            s = s.toLowerCase();
+            s = s.replace(/[^a-z0-9ğüşıöç]/g, '');
+            return s;
+        }
+
+        function parseDateCell(val, type) {
+            if (!val) return "";
+            let str = String(val).trim();
+            if (str.toLowerCase().includes("ders:") || str.toLowerCase().includes("onay:")) {
+                let regex = new RegExp(type + ":\\s*(.+?)(?:\\n|\\r|$)", "i");
+                let match = str.match(regex);
+                return match ? match[1].trim() : "";
+            }
+            return str;
+        }
+
+        window.processData = function(rawData) {
+            let colMap = {};
+            for (let r = 0; r < Math.min(rawData.length, 30); r++) {
+                rawData[r].forEach((cell, c) => {
+                    let s = normalizeString(cell);
+                    columnsConfig.forEach(config => {
+                        if (colMap[config.title] === undefined && config.excelKeys.includes(s)) {
+                            colMap[config.title] = c;
+                        }
+                    });
+                });
+            }
+
+            window.mappedData = [];
+            
+            rawData.forEach(rowArray => {
+                let rowObj = {};
+                let hasAnyData = false;
+                
+                columnsConfig.forEach(config => {
+                    if(config.isManual) return; 
+
+                    let colIdx = colMap[config.title];
+                    let rawVal = "";
+                    if (colIdx !== undefined && rowArray[colIdx] !== undefined && rowArray[colIdx] !== null) {
+                        rawVal = String(rowArray[colIdx]).trim();
+                    }
+                    
+                    let normVal = normalizeString(rawVal);
+                    if (config.excelKeys.includes(normVal)) {
+                        rawVal = "";
+                    }
+
+                    if (config.extractType && rawVal) {
+                        rawVal = parseDateCell(rawVal, config.extractType);
+                    }
+
+                    if (["Ders Başlama Tarihi", "Onay Başlama Tarihi", "Ders Bitiş Tarihi", "Onay Bitiş Tarihi"].includes(config.title) && rawVal) {
+                        rawVal = rawVal.replace(/\./g, ' '); 
+                    }
+                    
+                    rowObj[config.title] = rawVal;
+                    if (rawVal !== "") hasAnyData = true;
+                });
+
+                let hasId = rowObj["Eğitim ID"] && rowObj["Eğitim ID"] !== "";
+                let hasProgram = rowObj["Program Adı"] && rowObj["Program Adı"] !== "";
+
+                if (hasId || hasProgram) {
+                    window.mappedData.push(rowObj);
+                } else if (hasAnyData && window.mappedData.length > 0) {
+                    let lastRow = window.mappedData[window.mappedData.length - 1];
+                    
+                    Object.keys(rowObj).forEach(key => {
+                        let newVal = rowObj[key];
+                        let oldVal = String(lastRow[key] || "").trim();
+
+                        if (newVal !== "") {
+                            if (oldVal === "") {
+                                lastRow[key] = newVal;
+                            } 
+                            else if (oldVal !== newVal) {
+                                if (["Ders Günleri", "Ders Saatleri", "Derslik Bilgisi", "Eğitmen Adı"].includes(key)) {
+                                    let oldParts = oldVal.split(",").map(p => p.trim());
+                                    if (!oldParts.includes(newVal)) {
+                                        lastRow[key] = oldVal + ", " + newVal;
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+
+            window.mappedData.forEach(row => {
+                let saved = getSavedData(row["Eğitim ID"]);
+                row["Sınav Tarihleri"] = saved["Sınav Tarihleri"] || "";
+            });
+        };
+
+        window.toggleStrikethrough = function(checkbox, rowId, colTitle) {
+            const span = checkbox.nextElementSibling;
+            if (checkbox.checked) {
+                span.classList.add('line-through', 'text-gray-400');
+            } else {
+                span.classList.remove('line-through', 'text-gray-400');
+            }
+            window.updateFirebaseData(rowId, colTitle, checkbox.checked, true);
+        };
+
+        window.handleDateSelection = function(input, rowId, colTitle) {
+            if (!input.value) return;
+            
+            const monthNames = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+            const [year, month, day] = input.value.split("-");
+            
+            const formattedDate = `${day} ${monthNames[parseInt(month) - 1]} ${year}`;
+            
+            const editableDiv = input.parentElement.previousElementSibling;
+            let currentText = editableDiv.textContent.trim();
+            
+            if (currentText === "") {
+                editableDiv.textContent = formattedDate;
+            } else {
+                if (!currentText.includes(formattedDate)) {
+                    editableDiv.textContent = currentText + ", " + formattedDate;
+                }
+            }
+            
+            window.updateMappedData(rowId, colTitle, editableDiv.textContent);
+            window.updateFirebaseData(rowId, colTitle, editableDiv.textContent);
+            
+            input.value = "";
+        };
+
+        window.renderTable = function() {
+            const thead = document.getElementById('tableHead');
+            const tbody = document.getElementById('tableBody');
+            thead.innerHTML = '';
+            tbody.innerHTML = '';
+
+            if (window.mappedData.length === 0) return;
+
+            const headerRow = document.createElement('tr');
+            
+            columnsConfig.forEach(config => {
+                const th = document.createElement('th');
+                th.onclick = () => window.sortTable(config.title);
+                
+                let icon = '≡';
+                if (window.currentSortCol === config.title) {
+                    icon = window.sortAsc ? '▲' : '▼';
+                }
+                
+                th.innerHTML = `${config.title} <span class="sort-icon">${icon}</span>`;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+
+            const dateColumns = ["Ders Başlama Tarihi", "Onay Başlama Tarihi", "Ders Bitiş Tarihi", "Onay Bitiş Tarihi"];
+
+            window.mappedData.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.className = getRowColorClass(row); 
+                let rowId = row["Eğitim ID"];
+                let savedExtra = getSavedData(rowId);
+                
+                columnsConfig.forEach(config => {
+                    const td = document.createElement('td');
+                    let cellValue = row[config.title];
+                    if (cellValue === true || cellValue === "true") cellValue = "☑";
+                    
+                    if (config.isManual) {
+                        td.className = "group align-top";
+                        td.innerHTML = `
+                            <div class="flex items-start justify-between gap-1 w-full h-full">
+                                <div contenteditable="true" 
+                                     class="outline-none flex-grow min-w-[60px] min-h-[1.2rem] cursor-text break-words" 
+                                     onblur="window.updateFirebaseData('${rowId}', '${config.title}', this.textContent); window.updateMappedData('${rowId}', '${config.title}', this.textContent);">${cellValue}</div>
+                                <div class="relative w-4 h-4 mt-0.5 flex-shrink-0 text-gray-500 hover:text-gray-800 cursor-pointer opacity-50 group-hover:opacity-100 transition-opacity" title="Takvimden Seç">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                                    </svg>
+                                    <input type="date" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.handleDateSelection(this, '${rowId}', '${config.title}')">
+                                </div>
+                            </div>
+                        `;
+                    }
+                    else if (dateColumns.includes(config.title) && cellValue) {
+                        let isChecked = savedExtra.checks && savedExtra.checks[config.title];
+                        let spanClass = isChecked ? "line-through text-gray-400" : "transition-all duration-200";
+                        
+                        td.innerHTML = `
+                            <div class="flex items-start gap-1">
+                                <input type="checkbox" class="w-3 h-3 mt-1 text-blue-600 rounded border-gray-400 cursor-pointer shrink-0 relative z-10" 
+                                       ${isChecked ? 'checked' : ''} 
+                                       onchange="window.toggleStrikethrough(this, '${rowId}', '${config.title}')">
+                                <span class="date-text ${spanClass} leading-tight relative z-10">${cellValue}</span>
+                            </div>
+                        `;
+                    }
+                    else {
+                        td.textContent = cellValue;
+                    }
+
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+        };
+
+        const monthMap = {
+            "ocak": 1, "şubat": 2, "subat": 2, "mart": 3, "nisan": 4, "mayıs": 5, "mayis": 5, "haziran": 6,
+            "temmuz": 7, "ağustos": 8, "agustos": 8, "eylül": 9, "eylul": 9, "ekim": 10, "kasım": 11, "kasim": 11, "aralık": 12, "aralik": 12
+        };
+
+        function parseDateForSort(dateStr) {
+            if (!dateStr) return null;
+            let firstDate = String(dateStr).split(',')[0].trim();
+            let parts = firstDate.split(/\s+/);
+            if (parts.length >= 3) {
+                let day = parseInt(parts[0], 10);
+                let month = monthMap[parts[1].toLowerCase()] || 0;
+                let year = parseInt(parts[2], 10);
+                if (!isNaN(day) && month > 0 && !isNaN(year)) {
+                    return (year * 10000) + (month * 100) + day; 
+                }
+            }
+            return null; 
+        }
+
+        window.sortTable = function(col) {
+            if (window.currentSortCol === col) {
+                window.sortAsc = !window.sortAsc;
+            } else {
+                window.currentSortCol = col;
+                window.sortAsc = true;
+            }
+
+            let dateColTitles = ["Ders Başlama Tarihi", "Onay Başlama Tarihi", "Ders Bitiş Tarihi", "Onay Bitiş Tarihi", "Sınav Tarihleri"];
+
+            window.mappedData.sort((a, b) => {
+                let valA = a[col] !== undefined ? a[col] : "";
+                let valB = b[col] !== undefined ? b[col] : "";
+                
+                if (dateColTitles.includes(col)) {
+                    let dateA = parseDateForSort(valA);
+                    let dateB = parseDateForSort(valB);
+                    
+                    if (dateA !== null || dateB !== null) {
+                        if (dateA === null) return 1; 
+                        if (dateB === null) return -1;
+                        if (dateA < dateB) return window.sortAsc ? -1 : 1;
+                        if (dateA > dateB) return window.sortAsc ? 1 : -1;
+                        return 0;
+                    }
+                }
+
+                if (!isNaN(valA) && !isNaN(valB) && valA !== "" && valB !== "") {
+                    valA = Number(valA);
+                    valB = Number(valB);
+                } else {
+                    valA = String(valA).toLowerCase();
+                    valB = String(valB).toLowerCase();
+                }
+
+                if (valA < valB) return window.sortAsc ? -1 : 1;
+                if (valA > valB) return window.sortAsc ? 1 : -1;
+                return 0;
+            });
+
+            window.renderTable();
+        };
+
+        function getRowColorClass(row) {
+            let langStr = String(row["Program Adı"] || "").trim().toLowerCase();
+            if (!langStr) return 'row-default';
+            if (langStr.includes('ingilizce') || langStr.includes('i̇ngilizce')) return 'row-ingilizce';
+            if (langStr.includes('japonca')) return 'row-japonca';
+            if (langStr.includes('osmanlıca') || langStr.includes('osmanlica')) return 'row-osmanlica';
+            if (langStr.includes('türkçe') || langStr.includes('turkce') || langStr.includes('yabancılar')) return 'row-yturkce';
+            if (langStr.includes('arapça') || langStr.includes('arapca')) return 'row-arapca';
+            if (langStr.includes('fransızca') || langStr.includes('fransizca')) return 'row-fransizca';
+            if (langStr.includes('almanca') || langStr.includes('rusça') || langStr.includes('rusca')) return 'row-almanca';
+            if (langStr.includes('italyanca') || langStr.includes('i̇talyanca')) return 'row-italyanca';
+            if (langStr.includes('kürtçe') || langStr.includes('kurtce')) return 'row-kurtce';
+            if (langStr.includes('işaret') || langStr.includes('isaret')) return 'row-isaret';
+            return 'row-default';
+        }
+    </script>
+</body>
+</html>
