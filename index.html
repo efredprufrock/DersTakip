@@ -96,43 +96,47 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
         import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
-        // ==========================================
-        // 1. KENDİ FIREBASE AYARLARINI BURAYA YAPIŞTIR
-        // ==========================================
+        // Senin özel Firebase ayarların
         const firebaseConfig = {
-         apiKey: "AIzaSyAYsp2VRwhd84DUzDOdryZllxYYgD-FO78",
-          authDomain: "ibbderstakip.firebaseapp.com",
-          projectId: "ibbderstakip",
-          storageBucket: "ibbderstakip.firebasestorage.app",
-          messagingSenderId: "619222529088",
-          appId: "1:619222529088:web:ff1d9ea58ea295c205dba5"
+            apiKey: "AIzaSyAYsp2VRwhd84DUzDOdryZllxYYgD-FO78",
+            authDomain: "ibbderstakip.firebaseapp.com",
+            projectId: "ibbderstakip",
+            storageBucket: "ibbderstakip.firebasestorage.app",
+            messagingSenderId: "619222529088",
+            appId: "1:619222529088:web:ff1d9ea58ea295c205dba5"
         };
+
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // Global Değişkenler
         window.manualDataCache = {};
         window.mappedData = [];
         window.currentSortCol = null;
         window.sortAsc = true;
 
-        // Firebase'den Başlangıç Verilerini Çek
         window.loadInitialData = async function() {
             try {
-                // Sınav tarihleri ve tickleri getir
                 const extraRef = doc(db, "raporlar", "ekstra_veriler");
                 const extraSnap = await getDoc(extraRef);
                 if (extraSnap.exists()) {
                     window.manualDataCache = extraSnap.data();
                 }
 
-                // Kaydedilmiş Excel tablosunu getir
-                const excelRef = doc(db, "raporlar", "excel_verisi");
-                const excelSnap = await getDoc(excelRef);
+                const metaRef = doc(db, "raporlar", "excel_meta");
+                const metaSnap = await getDoc(metaRef);
                 
-                if (excelSnap.exists()) {
-                    let rawData = JSON.parse(excelSnap.data().jsonString);
-                    window.processData(rawData);
+                if (metaSnap.exists()) {
+                    const totalChunks = metaSnap.data().totalChunks;
+                    let fullData = [];
+                    
+                    for (let i = 0; i < totalChunks; i++) {
+                        const chunkSnap = await getDoc(doc(db, "raporlar", `excel_chunk_${i}`));
+                        if (chunkSnap.exists()) {
+                            fullData = fullData.concat(JSON.parse(chunkSnap.data().data));
+                        }
+                    }
+                    
+                    window.processData(fullData);
                     document.getElementById('emptyState').classList.add('hidden');
                     document.getElementById('dataTable').classList.remove('hidden');
                     window.renderTable();
@@ -142,23 +146,28 @@
                 }
             } catch (e) {
                 console.error("Buluttan veri çekilirken hata oluştu:", e);
-                document.getElementById('emptyText').innerText = "Veri bağlantı hatası.";
+                document.getElementById('emptyText').innerText = "Veri bağlantı hatası. Lütfen Firebase Rules ayarlarını kontrol edin.";
             }
         };
 
-        // Excel Yüklendiğinde Firebase'e Kaydet
         window.saveExcelToFirebase = async function(rawData) {
             try {
-                const jsonString = JSON.stringify(rawData);
-                await setDoc(doc(db, "raporlar", "excel_verisi"), { jsonString });
-                console.log("Excel buluta kaydedildi.");
+                const CHUNK_SIZE = 250; 
+                const totalChunks = Math.ceil(rawData.length / CHUNK_SIZE);
+                
+                await setDoc(doc(db, "raporlar", "excel_meta"), { totalChunks });
+
+                for (let i = 0; i < totalChunks; i++) {
+                    const chunk = rawData.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+                    await setDoc(doc(db, "raporlar", `excel_chunk_${i}`), { data: JSON.stringify(chunk) });
+                }
+                console.log("Excel buluta başarıyla kaydedildi.");
             } catch (e) {
                 console.error("Excel Firebase'e kaydedilemedi:", e);
-                alert("Dosya çok büyük olduğu için buluta tam yüklenememiş olabilir.");
+                alert("Veritabanı kayıt hatası. Firebase Rules ayarlarına izin verdiğinizden emin olun.");
             }
         };
 
-        // Tick veya Tarih Eklenince Firebase'i Güncelle
         window.updateFirebaseData = async function(id, key, value, isCheckbox = false) {
             if (!window.manualDataCache[id]) window.manualDataCache[id] = { checks: {} };
             
