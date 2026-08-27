@@ -109,7 +109,8 @@
         .dark .fc-daygrid-day-number { color: #f1f5f9 !important; }
         .dark .fc .fc-button-primary { background-color: #334155 !important; border-color: #475569 !important; color: #f8fafc !important; }
         .dark .fc .fc-button-primary:hover { background-color: #475569 !important; border-color: #64748b !important; }
-        .dark .fc .fc-button-primary:not(:disabled).fc-button-active { background-color: #0f172a !important; }
+        /* color: #f8fafc !important; eklenerek koyu temada yazının beyaz kalması garantilendi */
+        .dark .fc .fc-button-primary:not(:disabled).fc-button-active, .dark .fc .fc-button-primary:not(:disabled):active { background-color: #0f172a !important; color: #f8fafc !important; }
         
         .dark #customTooltip { background-color: #1e293b !important; color: #f1f5f9 !important; border-color: #475569 !important; box-shadow: 0 10px 25px rgba(0,0,0,0.8) !important; }
         .dark #customTooltip .text-gray-500 { color: #94a3b8 !important; }
@@ -121,7 +122,29 @@
         .dark .fc-daygrid-event { color: #f8fafc !important; border-color: rgba(255,255,255,0.1) !important; box-shadow: 0 1px 3px rgba(0,0,0,0.5) !important; }
         .dark .fc-event-main .text-gray-900 { color: #f8fafc !important; }
 
+        /* ==========================================
+           MOBİL CİHAZ (TELEFON) OPTİMİZASYONLARI
+           ========================================== */
+        @media (max-width: 768px) {
+            /* Tablonun sıkışmamasını ve yana kaydırılabilmesini (scroll) sağlar */
+            table { min-width: 800px; }
+            th, td { white-space: nowrap; font-size: 0.7rem; padding: 6px 4px; }
+            
+            /* Takvim menüsünü telefona sığacak şekilde alt alta dizer */
+            .fc-header-toolbar { flex-direction: column !important; gap: 8px; }
+            .fc-toolbar-chunk { display: flex; justify-content: center; width: 100%; }
+            .fc-toolbar-title { font-size: 1.1rem !important; }
+            
+            /* Bilgi paneli (Tooltip) ekran dışına taşmasın diye daraltılır */
+            #customTooltip { width: 90vw !important; max-width: 300px; left: 5vw !important; }
+        }
+
         /* --- TAKVİM ÖZELLEŞTİRMELERİ --- */
+        /* Açık temada takvim butonlarının (Bugün, <, > vb.) koyu arka plan + beyaz font olmasını engeller */
+        .fc .fc-button-primary { background-color: #f1f5f9 !important; border-color: #cbd5e1 !important; color: #334155 !important; text-shadow: none !important; }
+        .fc .fc-button-primary:hover { background-color: #e2e8f0 !important; border-color: #94a3b8 !important; color: #0f172a !important; }
+        .fc .fc-button-primary:not(:disabled).fc-button-active, .fc .fc-button-primary:not(:disabled):active { background-color: #cbd5e1 !important; border-color: #94a3b8 !important; color: #0f172a !important; }
+
         .fc-theme-standard td, .fc-theme-standard th { border-color: #e2e8f0; }
         /* Takvim gün kutularını sabitler, içeriği esnek yapar */
         .fc-daygrid-day-frame { display: flex; flex-direction: column; height: 100%; }
@@ -160,19 +183,20 @@
 </head>
 <body class="bg-gray-100 p-2 sm:p-4 font-sans h-screen flex flex-col overflow-hidden">
 
-    <div class="w-full flex-1 mx-auto bg-white p-4 rounded-lg shadow-md border border-gray-200 flex flex-col min-h-0">
-            <div class="flex justify-between items-end mb-4 border-b pb-4 shrink-0">
-                <div class="flex flex-col gap-4">
-                    <h1 class="text-xl font-bold text-gray-800 tracking-tight">Eİİ, Şişli Dil Okulu, Ders Takip Sistemi</h1>
+    <div class="w-full flex-1 mx-auto bg-white p-2 sm:p-4 rounded-lg shadow-md border border-gray-200 flex flex-col min-h-0">
+            <!-- Mobil uyumlu başlık ve buton satırı (flex-col md:flex-row) -->
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-4 border-b pb-4 shrink-0 w-full">
+                <div class="flex flex-col gap-3 w-full md:w-auto">
+                    <h1 class="text-lg sm:text-xl font-bold text-gray-800 tracking-tight">Eİİ, Şişli Dil Okulu, Ders Takip Sistemi</h1>
                     
                     <!-- Sekmeler (Tabs) -->
-                    <div class="flex space-x-2">
-                        <button id="btnTableView" onclick="window.switchView('table')" class="px-5 py-2 bg-slate-800 text-white text-sm font-semibold rounded-md shadow transition-colors">Tablo</button>
-                        <button id="btnCalendarView" onclick="window.switchView('calendar')" class="px-5 py-2 bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300 text-sm font-semibold rounded-md shadow-sm transition-colors">Takvim</button>
+                    <div class="flex space-x-2 w-full">
+                        <button id="btnTableView" onclick="window.switchView('table')" class="flex-1 md:flex-none px-3 sm:px-5 py-2 bg-slate-800 text-white text-xs sm:text-sm font-semibold rounded-md shadow transition-colors">Tablo</button>
+                        <button id="btnCalendarView" onclick="window.switchView('calendar')" class="flex-1 md:flex-none px-3 sm:px-5 py-2 bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300 text-xs sm:text-sm font-semibold rounded-md shadow-sm transition-colors">Takvim</button>
                     </div>
                 </div>
-            
-            <div class="flex items-center gap-3">
+
+                <div class="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto">
                 <!-- Tema Değiştirme Butonu (Ay / Güneş) -->
                 <button id="themeToggleBtn" onclick="window.toggleTheme()" class="p-3 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 transition-colors shadow-md theme-btn" title="Gece/Gündüz Modu">
                     <svg id="themeIconSun" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 hidden">
@@ -195,7 +219,7 @@
         </div>
 
         <!-- TABLO GÖRÜNÜMÜ KAPSAYICISI -->
-        <div id="tableViewContainer" class="overflow-x-hidden border border-gray-400 rounded flex-1 overflow-y-auto shadow-inner bg-white relative min-h-0 block">
+        <div id="tableViewContainer" class="overflow-x-auto border border-gray-400 rounded flex-1 overflow-y-auto shadow-inner bg-white relative min-h-0 block">
             
             <!-- Aktif Eğitimler Tablosu -->
             <table id="dataTable" class="hidden">
@@ -204,7 +228,7 @@
             </table>
 
             <!-- Tamamlanmış Eğitimler Bölümü -->
-            <div id="completedSection" class="hidden mt-10 border-t-4 border-gray-400">
+            <div id="completedSection" class="hidden mt-10 border-t-4 border-gray-400 overflow-x-auto">
                 <h2 class="text-lg font-bold text-gray-700 p-3 bg-gray-200">✅ Tamamlanmış Eğitimler</h2>
                 <table class="w-full text-left table-auto border-collapse">
                     <thead id="completedTableHead"></thead>
@@ -974,7 +998,8 @@
                         
                         return {
                             html: `
-                                <div title="${tooltip}" class="flex flex-col w-full gap-1 cursor-help" style="font-size: 0.65rem; line-height: 1.15; word-break: break-word;">
+                                <!-- text-gray-700 eklenerek açık temada yazıların beyaz olması engellendi -->
+                                <div title="${tooltip}" class="flex flex-col w-full gap-1 cursor-help text-gray-700 dark:text-gray-200" style="font-size: 0.65rem; line-height: 1.15; word-break: break-word;">
                                     <div class="font-bold border-b border-black/10 pb-0.5 opacity-80">${props.taskName}</div>
                                     <div class="font-semibold text-gray-900 leading-tight">${props.programName}</div>
                                     <div class="italic opacity-80">${props.instructorName}</div>
@@ -993,6 +1018,23 @@
                 }, 50);
             }
         };
+
+        // Şık Bilgi Paneli (Tooltip) Elementini Oluştur (Yoksa body'ye ekle)
+            let tooltipEl = document.getElementById('customTooltip');
+            if (!tooltipEl) {
+                tooltipEl = document.createElement('div');
+                tooltipEl.id = 'customTooltip';
+                tooltipEl.className = 'fixed z-[9999] bg-white border border-gray-200 shadow-2xl rounded-lg p-4 text-sm text-gray-800 pointer-events-none w-72 transition-opacity duration-200 opacity-0 hidden';
+                document.body.appendChild(tooltipEl);
+                
+                // Telefonda (dokunmatik ekranda) paneli kapatmak için ekrana dokunma algılayıcısı
+                document.addEventListener('touchstart', function() {
+                    tooltipEl.classList.add('opacity-0');
+                    setTimeout(() => tooltipEl.classList.add('hidden'), 200);
+                }, {passive: true});
+            }
+
     </script>
+    
 </body>
 </html>
