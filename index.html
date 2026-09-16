@@ -360,29 +360,30 @@
     <script>
         // Yeni SMS ve Notlar Sütunları eklendi. isCheckboxOnly ve isNotes atamaları yapıldı.
         const columnsConfig = [
-            { title: "HEM Kodu", excelKeys: ["hemkodu", "kurumkodu", "hemkod"] },
-            { title: "Eğitim ID", excelKeys: ["eğitimid", "eğitimıd", "egitimid", "egitimıd", "dersid", "dersıd", "kursno", "id", "ıd"] },
+            { title: "HEM", excelKeys: ["hemkodu", "kurumkodu", "hemkod"] },
+            { title: "ID", excelKeys: ["eğitimid", "eğitimıd", "egitimid", "egitimıd", "dersid", "dersıd", "kursno", "id", "ıd"] },
             { title: "Eğitmen Adı", excelKeys: ["eğitmenadı", "egitmenadi", "eğitmen", "egitmen", "öğretmen", "ogretmen"] },
             { title: "Program Adı", excelKeys: ["programadı", "programadi", "branş", "brans", "kursadı", "kursadi"] },
-            { title: "Sınav Tarihleri", excelKeys: [], isManual: true },
-            { title: "Ders Başlama Tarihi", excelKeys: ["başlamatarihi", "baslamatarihi", "dersbaşlamatarihi", "dersbaslamatarihi", "dbaşlama", "dbaslama", "başlama", "baslama"], extractType: "Ders" },
-            { title: "Onay Başlama Tarihi", excelKeys: ["başlamatarihi", "baslamatarihi", "onaybaşlamatarihi", "onaybaslamatarihi", "obaşlama", "obaslama"], extractType: "Onay" },
-            { title: "Onay Bitiş Tarihi", excelKeys: ["bitiştarihi", "bitistarihi", "onaybitiştarihi", "onaybitistarihi", "obitiş", "obitis"], extractType: "Onay" },
-            { title: "Ders Bitiş Tarihi", excelKeys: ["bitiştarihi", "bitistarihi", "dersbitiştarihi", "dersbitistarihi", "dbitiş", "dbitis", "bitiş", "bitis"], extractType: "Ders" },
+            { title: "Yazılı Sınav", excelKeys: [], isManual: true },
+            { title: "Konuşma Sınavı", excelKeys: [], isManual: true },
+            { title: "Ders Başlama", excelKeys: ["başlamatarihi", "baslamatarihi", "dersbaşlamatarihi", "dersbaslamatarihi", "dbaşlama", "dbaslama", "başlama", "baslama"], extractType: "Ders" },
+            { title: "Onay Başlama", excelKeys: ["başlamatarihi", "baslamatarihi", "onaybaşlamatarihi", "onaybaslamatarihi", "obaşlama", "obaslama"], extractType: "Onay" },
+            { title: "Onay Bitiş", excelKeys: ["bitiştarihi", "bitistarihi", "onaybitiştarihi", "onaybitistarihi", "obitiş", "obitis"], extractType: "Onay" },
+            { title: "Ders Bitiş", excelKeys: ["bitiştarihi", "bitistarihi", "dersbitiştarihi", "dersbitistarihi", "dbitiş", "dbitis", "bitiş", "bitis"], extractType: "Ders" },
             { title: "Ders Günleri", excelKeys: ["gun", "gün", "dersgünleri", "dersgunleri", "günler", "gunler"] },
             { title: "Ders Saatleri", excelKeys: ["zaman", "derssaatleri", "saatler", "vakit", "saat"] },
             { title: "Derslik Bilgisi", excelKeys: ["derslik", "derslikbilgisi", "sınıf", "sinif", "mekan", "salon"] },
             { title: "Notlar", excelKeys: [], isNotes: true }
         ];
 
-        const dateColumns = ["Ders Başlama Tarihi", "Onay Başlama Tarihi", "Ders Bitiş Tarihi", "Onay Bitiş Tarihi"];
+        const dateColumns = ["Ders Başlama", "Onay Başlama", "Ders Bitiş", "Onay Bitiş"];
 
         function getSavedData(id) {
             return window.manualDataCache[id] || { checks: {} };
         }
 
         window.updateMappedData = function(rowId, colTitle, value) {
-            let rowData = window.mappedData.find(r => r["Eğitim ID"] == rowId);
+            let rowData = window.mappedData.find(r => r["ID"] == rowId);
             if (rowData) rowData[colTitle] = value;
         };
 
@@ -477,7 +478,7 @@
                     if (rawVal !== "") hasAnyData = true;
                 });
 
-                let hasId = rowObj["Eğitim ID"] && rowObj["Eğitim ID"] !== "";
+                let hasId = rowObj["ID"] && rowObj["ID"] !== "";
                 let hasProgram = rowObj["Program Adı"] && rowObj["Program Adı"] !== "";
 
                 if (hasId || hasProgram) {
@@ -507,8 +508,18 @@
             });
 
             window.mappedData.forEach(row => {
-                let saved = getSavedData(row["Eğitim ID"]);
-                row["Sınav Tarihleri"] = saved["Sınav Tarihleri"] || "";
+                let saved = getSavedData(row["ID"]);
+                
+                // Eski "Sınav Tarihleri" verilerini "Yazılı Sınav"a aktar (Geçiş/Kurtarma işlemi)
+                if (!saved["Yazılı Sınav"] && saved["Sınav Tarihleri"]) {
+                    saved["Yazılı Sınav"] = saved["Sınav Tarihleri"];
+                }
+                if (saved.checks && saved.checks["Yazılı Sınav"] === undefined && saved.checks["Sınav Tarihleri"] !== undefined) {
+                    saved.checks["Yazılı Sınav"] = saved.checks["Sınav Tarihleri"];
+                }
+
+                row["Yazılı Sınav"] = saved["Yazılı Sınav"] || "";
+                row["Konuşma Sınavı"] = saved["Konuşma Sınavı"] || "";
                 row["Notlar"] = saved["Notlar"] || "";
             });
         };
@@ -643,7 +654,7 @@
             filteredData.forEach(row => {
                 const tr = document.createElement('tr');
                 tr.className = getRowColorClass(row); 
-                let rowId = row["Eğitim ID"];
+                let rowId = row["ID"];
                 let savedExtra = getSavedData(rowId);
 
                 let isComplete = true;
@@ -765,7 +776,7 @@
                 window.sortAsc = true;
             }
 
-            let dateColTitles = [...dateColumns, "Sınav Tarihleri"];
+            let dateColTitles = [...dateColumns, "Yazılı Sınav", "Konuşma Sınavı"];
 
             window.mappedData.sort((a, b) => {
                 let valA = a[col] !== undefined ? a[col] : "";
@@ -931,14 +942,19 @@
                     }
                 };
 
-                addEvent(row["Ders Başlama Tarihi"], "Ders Başlama");
-                addEvent(row["Onay Başlama Tarihi"], "Onay Başlama");
-                addEvent(row["Ders Bitiş Tarihi"], "Ders Bitiş");
-                addEvent(row["Onay Bitiş Tarihi"], "Onay Bitiş");
+                addEvent(row["Ders Başlama"], "Ders Başlama");
+                addEvent(row["Onay Başlama"], "Onay Başlama");
+                addEvent(row["Ders Bitiş"], "Ders Bitiş");
+                addEvent(row["Onay Bitiş"], "Onay Bitiş");
 
-                let sinavTarihleri = row["Sınav Tarihleri"] || getSavedData(row["Eğitim ID"])["Sınav Tarihleri"] || "";
-                if (sinavTarihleri) {
-                    sinavTarihleri.split(',').forEach(d => addEvent(d.trim(), "Sınav Tarihi"));
+                let yaziliSinav = row["Yazılı Sınav"] || getSavedData(row["ID"])["Yazılı Sınav"] || "";
+                if (yaziliSinav) {
+                    yaziliSinav.split(',').forEach(d => addEvent(d.trim(), "Yazılı Sınav"));
+                }
+                
+                let konusmaSinavi = row["Konuşma Sınavı"] || getSavedData(row["ID"])["Konuşma Sınavı"] || "";
+                if (konusmaSinavi) {
+                    konusmaSinavi.split(',').forEach(d => addEvent(d.trim(), "Konuşma Sınavı"));
                 }
             });
 
