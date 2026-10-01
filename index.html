@@ -368,6 +368,7 @@
             { title: "Konuşma Sınavı", excelKeys: [], isManual: true },
             { title: "Ders Başlama", excelKeys: ["başlamatarihi", "baslamatarihi", "dersbaşlamatarihi", "dersbaslamatarihi", "dbaşlama", "dbaslama", "başlama", "baslama"], extractType: "Ders" },
             { title: "Onay Başlama", excelKeys: ["başlamatarihi", "baslamatarihi", "onaybaşlamatarihi", "onaybaslamatarihi", "obaşlama", "obaslama"], extractType: "Onay" },
+            { title: "Modül", excelKeys: [], isCheckboxOnly: true },
             { title: "Onay Bitiş", excelKeys: ["bitiştarihi", "bitistarihi", "onaybitiştarihi", "onaybitistarihi", "obitiş", "obitis"], extractType: "Onay" },
             { title: "Ders Bitiş", excelKeys: ["bitiştarihi", "bitistarihi", "dersbitiştarihi", "dersbitistarihi", "dbitiş", "dbitis", "bitiş", "bitis"], extractType: "Ders" },
             { title: "Ders Günleri", excelKeys: ["gun", "gün", "dersgünleri", "dersgunleri", "günler", "gunler"] },
@@ -453,7 +454,7 @@
                 
                 columnsConfig.forEach(config => {
                     // Excel'den çekilmeyecek sütunları atla
-                    if(config.isManual || config.isNotes) return; 
+                    if(config.isManual || config.isNotes || config.isCheckboxOnly) return; 
 
                     let colIdx = colMap[config.title];
                     let rawVal = "";
@@ -678,7 +679,24 @@
                     let cellValue = row[config.title];
                     if (cellValue === true || cellValue === "true") cellValue = "☑";
                     
-                    if (config.isNotes) {
+                    if (config.isCheckboxOnly) {
+                        let isChecked = savedExtra.checks && savedExtra.checks[config.title];
+                        let savedText = row[config.title] || savedExtra[config.title] || "";
+                        let textStyle = isChecked ? "line-through text-gray-400" : "text-gray-700";
+                        
+                        td.className = "align-top group";
+                        td.innerHTML = `
+                            <div class="flex items-start justify-center gap-1">
+                                <input type="checkbox" class="w-3 h-3 mt-1 text-blue-600 rounded border-gray-400 cursor-pointer shrink-0" 
+                                       ${isChecked ? 'checked' : ''} 
+                                       onchange="window.toggleStrikethrough(this, '${rowId}', '${config.title}')">
+                                <div contenteditable="true" 
+                                     class="outline-none min-w-[50px] min-h-[1.2rem] cursor-text break-words text-[0.65rem] leading-tight text-left transition-all duration-200 ${textStyle}" 
+                                     onblur="window.updateFirebaseData('${rowId}', '${config.title}', this.textContent); window.updateMappedData('${rowId}', '${config.title}', this.textContent);">${savedText}</div>
+                            </div>
+                        `;
+                    }
+                    else if (config.isNotes) {
                         td.className = "group align-top";
                         td.innerHTML = `
                             <div contenteditable="true" 
