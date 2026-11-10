@@ -336,21 +336,24 @@
         };
 
         window.updateFirebaseData = async function(id, key, value, isCheckbox = false) {
-            if (!window.manualDataCache[id]) window.manualDataCache[id] = { checks: {} };
-            
-            if (isCheckbox) {
-                if (!window.manualDataCache[id].checks) window.manualDataCache[id].checks = {};
-                window.manualDataCache[id].checks[key] = value;
-            } else {
-                window.manualDataCache[id][key] = value;
-            }
+    if (!window.manualDataCache[id]) window.manualDataCache[id] = { checks: {} };
 
-            try {
-                await setDoc(doc(db, "raporlar", "ekstra_veriler"), window.manualDataCache);
-            } catch (e) {
-                console.error("Ekstra veriler Firebase'e kaydedilemedi:", e);
-            }
-        };
+    let patch;
+    if (isCheckbox) {
+        if (!window.manualDataCache[id].checks) window.manualDataCache[id].checks = {};
+        window.manualDataCache[id].checks[key] = value;
+        patch = { [id]: { checks: { [key]: value } } };
+    } else {
+        window.manualDataCache[id][key] = value;
+        patch = { [id]: { [key]: value } };
+    }
+
+    try {
+        await setDoc(doc(db, "raporlar", "ekstra_veriler"), patch, { merge: true });
+    } catch (e) {
+        console.error("Ekstra veriler Firebase'e kaydedilemedi:", e);
+    }
+};
 
         window.addEventListener('DOMContentLoaded', () => {
             window.loadInitialData();
